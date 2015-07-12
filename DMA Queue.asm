@@ -48,7 +48,7 @@
 ; * 48(11/0) cycles if the queue was full at the start (as always);
 ; * 214(37/9) cycles for DMA transfers that do not need to be split into two;
 ; * 252(46/9) cycles if the first piece of the DMA filled the queue;
-; * 364(63/16) cycles if both pieces of the DMA were queued
+; * 368(64/16) cycles if both pieces of the DMA were queued
 ; For comparison, times for the Sonic3_Complete version are:
 ; * If the source is in address $800000 and up (32x RAM, z80 RAM, main RAM):
 ; 	* 72(16/0) cycles if the queue was full
@@ -77,7 +77,20 @@ Use128kbSafeDMA := 0
 ; restore interrupts after.
 UseVIntSafeDMA := 0
 ; ===========================================================================
+; Option to assume that transfer length is always less than $7FFF. Only makes
+; sense if Use128kbSafeDMA is 1. Moreover, setting this to 1 will cause trouble
+; on a 64kB DMA, so make sure you never do one if you set it to 1!
+; Enabling this saves 4(1/0) cycles on the case where a DMA is broken in two and
+; both transfers are properly queued, and nothing at all otherwise.
+AssumeMax7FFFXfer := 0&Use128kbSafeDMA
+; ===========================================================================
 ; Convenience macros, for increased maintainability of the code.
+    ifndef DMA
+DMA = %100111
+    endif
+    ifndef READ
+READ = %001100
+    endif
     ifndef VRAMCommReg_defined
 VRAMCommReg_defined := 1
 VRAMCommReg macro reg,rwd,clr
@@ -123,8 +136,6 @@ QueueDMATransfer:
 
 	lsr.l	#1,d1							; Source address is in words for the VDP registers
     if Use128kbSafeDMA==1
-	; Note: unless you modded your Genesis for 128kB of VRAM, then d3 can be at
-	; most $7FFF here in a valid call; we will assume this is the case
 	move.w  d3,d0							; d0 = length of transfer in words
 	; Compute position of last transferred word. This handles 2 cases:
 	; (1) zero length DMAs transfer length actually transfer $10000 words
@@ -161,7 +172,6 @@ QueueDMATransfer:
 	; that do not cross a 128kB boundary. This is done much faster (at the cost
 	; of space) than by the method of saving parameters and calling the normal
 	; DMA function twice, as Sonic3_Complete does.
-	; If we got here, d0 now has bit 15 clear
 	; d0 is the number of words-1 that got over the end of the 128kB boundary
 	addq.w	#1,d0							; Make d0 the number of words past the 128kB boundary
 	sub.w	d0,d3							; First transfer will use only up to the end of the 128kB boundary
@@ -188,8 +198,14 @@ QueueDMATransfer:
 	; Store VDP commands for specifying DMA into the queue
 	; The source address high byte was done above already in the comments marked
 	; with (**)
-	ext.l	d0								; Since d0 was at most $7FFF, fills high word with 0: this corresponds to a 128kB block start
-	movep.l	d0,3(a1)						; ... and stuff them all into RAM in their proper places (movep for the win)
+    if AssumeMax7FFFXfer==1
+	ext.l	d0								; With maximum $7FFF transfer length, bit 15 of d0 is unset here
+	movep.l	d0,3(a1)						; Stuff it all into RAM at the proper places (movep for the win)
+    else
+	moveq	#0,d2							; Need a zero for a 128kB block start
+	move.w	d0,d2							; Copy number of words on this new block...
+	movep.l	d2,3(a1)						; ... and stuff it all into RAM at the proper places (movep for the win)
+    endif
 	lea	10(a1),a1							; Skip past all of these commands
 	; d1 contains length up to the end of the 128kB boundary
 	add.w	d1,d1							; Convert it into byte length...
