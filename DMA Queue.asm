@@ -35,7 +35,7 @@
 ; RAM in a few cases: whenever a call to QueueDMATransfer has this instruction:
 ; 	andi.l #$FFFFFF,d1
 ; You can simply delete it and gain 16(3/0) cycles.
-; ---------------------------------------------------------------------------
+; ===========================================================================
 ; This option breaks DMA transfers that crosses a 128kB block into two. It is
 ; disabled by default because you can simply align the art in ROM and avoid the
 ; issue altogether. It is here so that you have a high-performance routine to do
@@ -69,15 +69,15 @@
 ; should not, meaning you will be wasting more cycles than can be seen by just
 ; comparing similar scenarios.
 Use128kbSafeDMA := 0
-; ---------------------------------------------------------------------------
+; ===========================================================================
 ; Option to mask interrupts while updating the DMA queue. This fixes many race
 ; conditions in the DMA funcion, but it costs 46(6/1) cycles. The better way to
 ; handle these race conditions would be to make unsafe callers (such as S3&K's
 ; KosM decoder) prevent these by masking off interrupts before calling and then
 ; restore interrupts after.
 UseVIntSafeDMA := 0
-; ---------------------------------------------------------------------------
-; Convenience macro, for increased maintainability of the code.
+; ===========================================================================
+; Convenience macros, for increased maintainability of the code.
     ifndef VRAMCommReg_defined
 VRAMCommReg_defined := 1
 VRAMCommReg macro reg,rwd,clr
@@ -96,6 +96,18 @@ VRAMCommReg macro reg,rwd,clr
     endm
     endif
 
+    ifndef intMacros_defined
+intMacros_defined := 1
+enableInts macro
+	move	#$2300,sr
+    endm
+
+disableInts macro
+	move	#$2700,sr
+    endm
+    endif
+; ===========================================================================
+
 ; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
 
 ; sub_144E: DMA_68KtoVRAM: QueueCopyToVRAM: QueueVDPCommand:
@@ -103,7 +115,7 @@ Add_To_DMA_Queue:
 QueueDMATransfer:
     if UseVIntSafeDMA==1
 	move.w	sr,-(sp)						; Save current interrupt mask
-	move.w	#$2700,sr						; Mask off interrupts
+	disableInts								; Mask off interrupts
     endif ; UseVIntSafeDMA==1
 	movea.w	(VDP_Command_Buffer_Slot).w,a1
 	cmpa.w	#VDP_Command_Buffer_Slot,a1
