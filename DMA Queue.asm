@@ -209,9 +209,9 @@ QueueDMATransfer:
 	lea	10(a1),a1							; Skip past all of these commands
 	; d1 contains length up to the end of the 128kB boundary
 	add.w	d1,d1							; Convert it into byte length...
-	add.w	d1,d3							; ... and offset destination by the correct amount
-	VRAMCommReg d3, DMA, 1					; Make DMA destination command
-	move.l	d3,(a1)+						; Store command
+	add.w	d3,d1							; ... and offset destination by the correct amount
+	VRAMCommReg d1, DMA, 1					; Make DMA destination command
+	move.l	d1,(a1)+						; Store command
 
 	clr.w	(a1)							; Put a stop token at the end of the used part of the queue
 	move.w	a1,(VDP_Command_Buffer_Slot).w	; Set the next free slot address, potentially undoing the above clr (this is intentional!)
