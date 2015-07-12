@@ -158,7 +158,8 @@ Now find all cases of
 		bsr.w	Init_VDP
 ```
 and change them to
-```68k		jsr	(InitDMAQueue).l
+```68k
+		jsr	(InitDMAQueue).l
 		bsr.w	Init_VDP
 ```
 Finally, find this:
