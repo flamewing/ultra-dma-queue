@@ -13,7 +13,7 @@
 ;
 ; With both options below set to zero, the function runs in:
 ; * 48(11/0) cycles if the queue was full at the start;
-; * 198(34/9) cycles otherwise
+; * 194(33/9) cycles otherwise
 ; The times for the original S2 function are:
 ; * 52(12/0) cycles if the queue was full at the start;
 ; * 336(51/9) cycles if queue became full with new command;
@@ -29,15 +29,12 @@
 ; them unsafe for use by the KosM decoder, since it sets V-Int routine before it
 ; executes. This can lead to broken DMAs in some rare circumstances.
 ;
-; Like the S3&K version, but unlike the S2 version, this function is safe when
-; the source is in RAM. This makes this function slightly slower that it could
-; be otherwise; the highly optimized way in which this is done, however, causes
-; a total loss of 4(2/-1) cycles, so I decided this was acceptable.
-; Moreover, you can recoup these cycles and more when you are doing a transfer
-; from RAM: whenever a call to QueueDMATransfer has this instruction:
+; Like the S3&K version, but unlike the S2 version, this function is "safe" when
+; the source is in RAM; this comes at no cost whatsoever, unlike what happens in
+; the S3&K version. Moreover, you can gain a few more cycles if the source is in
+; RAM in a few cases: whenever a call to QueueDMATransfer has this instruction:
 ; 	andi.l #$FFFFFF,d1
-; You can simply delete it and gain 16(3/0) cycles, so you end up with a gain of
-; 12(1/1) cycles instead of the aforementioned loss.
+; You can simply delete it and gain 16(3/0) cycles.
 ; ---------------------------------------------------------------------------
 ; This option breaks DMA transfers that crosses a 128kB block into two. It is
 ; disabled by default because you can simply align the art in ROM and avoid the
@@ -50,14 +47,14 @@
 ; boundary. For convenience, here are total times for all cases:
 ; * 48(11/0) cycles if the queue was full at the start (as always);
 ; * 214(37/9) cycles for DMA transfers that do not need to be split into two;
-; * 244(44/9) cycles if the first piece of the DMA filled the queue;
-; * 356(61/16) cycles if both pieces of the DMA were queued
+; * 252(46/9) cycles if the first piece of the DMA filled the queue;
+; * 364(63/16) cycles if both pieces of the DMA were queued
 ; For comparison, times for the Sonic3_Complete version are:
-; * If the source is in address $800000 and up (z80 RAM, main RAM):
+; * If the source is in address $800000 and up (32x RAM, z80 RAM, main RAM):
 ; 	* 72(16/0) cycles if the queue was full
 ; 	* 364(57/0) cycles if queue became full with new command;
 ; 	* 374(58/10) cycles otherwise
-; * If the source is in address $7FFFFF and down (ROM, SCD RAM, 32x RAM):
+; * If the source is in address $7FFFFF and down (ROM, both SCD RAMs):
 ; 	* If the DMA does not need to be split:
 ; 		* 294(53/10) cycles if the queue was full at the start;
 ; 		* 586(94/19) cycles if queue became full with new command;
@@ -79,65 +76,87 @@ Use128kbSafeDMA := 0
 ; KosM decoder) prevent these by masking off interrupts before calling and then
 ; restore interrupts after.
 UseVIntSafeDMA := 0
+; ---------------------------------------------------------------------------
+; Convenience macro, for increased maintainability of the code.
+    ifndef VRAMCommReg_defined
+VRAMCommReg_defined := 1
+VRAMCommReg macro reg,rwd,clr
+	lsl.l	#2,reg							; Move high bits into (word-swapped) position, accidentally moving everything else
+    if rwd <> READ
+	addq.w	#1,reg							; Add write bit...
+    endif
+	ror.w	#2,reg							; ... and put it into place, also moving all other bits into their correct (word-swapped) places
+	swap	reg								; Put all bits in proper places
+    if clr <> 0
+	andi.w	#3,reg							; Strip whatever junk was in upper word of reg
+    endif
+	if rwd == DMA
+	tas.b	reg								; Add in the DMA bit -- tas fails on memory, but works on registers
+    endif
+    endm
+    endif
 
 ; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
 
-; sub_144E: DMA_68KtoVRAM: QueueCopyToVRAM: QueueVDPCommand: Add_To_DMA_Queue:
+; sub_144E: DMA_68KtoVRAM: QueueCopyToVRAM: QueueVDPCommand:
+Add_To_DMA_Queue:
 QueueDMATransfer:
-	if UseVIntSafeDMA==1
+    if UseVIntSafeDMA==1
 	move.w	sr,-(sp)						; Save current interrupt mask
 	move.w	#$2700,sr						; Mask off interrupts
-	endif ; UseVIntSafeDMA==1
+    endif ; UseVIntSafeDMA==1
 	movea.w	(VDP_Command_Buffer_Slot).w,a1
 	cmpa.w	#VDP_Command_Buffer_Slot,a1
 	beq.s	.done							; return if there's no more room in the queue
 
 	lsr.l	#1,d1							; Source address is in words for the VDP registers
-	if Use128kbSafeDMA==1
-	move.w	d1,d0							; d0 = (src_address >> 1) & $FFFF
+    if Use128kbSafeDMA==1
 	; Note: unless you modded your Genesis for 128kB of VRAM, then d3 can be at
 	; most $7FFF here in a valid call; we will assume this is the case
-	add.w	d3,d0							; d0 = ((src_address >> 1) & $FFFF) + (xfer_len >> 1)
-	bcs.s	.double_transfer				; Carry set = ($10000 << 1) = $20000, or new 128kB block
-	endif ; Use128kbSafeDMA==1
+	move.w  d3,d0							; d0 = length of transfer in words
+	; Compute position of last transferred word. This handles 2 cases:
+	; (1) zero length DMAs transfer length actually transfer $10000 words
+	; (2) (source+length)&$FFFF == 0
+	subq.w  #1,d0
+	add.w   d1,d0							; d0 = ((src_address >> 1) & $FFFF) + ((xfer_len >> 1) - 1)
+	bcs.s   .double_transfer				; Carry set = ($10000 << 1) = $20000, or new 128kB block
+    endif ; Use128kbSafeDMA==1
 
 	; Store VDP commands for specifying DMA into the queue
 	swap	d1								; Want the high byte first
-	andi.w	#$7F,d1							; Strip high bit
-	ori.w	#$9700,d1						; Command to specify source address & $FE0000
-	move.w	d1,(a1)+						; Store command
+	move.w	#$977F,d0						; Command to specify source address & $FE0000, plus bitmask for the given byte
+	and.b	d1,d0							; Mask in source address & $FE0000, stripping high bit in the process
+	move.w	d0,(a1)+						; Store command
 	move.w	d3,d1							; Put length together with (source address & $01FFFE) >> 1...
 	movep.l	d1,1(a1)						; ... and stuff them all into RAM in their proper places (movep for the win)
 	lea	8(a1),a1							; Skip past all of these commands
 
-	lsl.l	#2,d2							; Move high bits into (word-swapped) position, accidentally moving everything else
-	addq.w	#1,d2							; Add write bit...
-	ror.w	#2,d2							; ... and put it into place, also moving all other bits into their correct (word-swapped) places
-	swap	d2								; Put all bits in proper places
-	andi.w	#3,d2							; Strip whatever junk was in upper word of d2
-	tas.b	d2								; Add in the DMA bit -- tas fails on memory, but works on registers
+	VRAMCommReg d2, DMA, 1					; Make DMA destination command
 	move.l	d2,(a1)+						; Store command
 
 	clr.w	(a1)							; Put a stop token at the end of the used part of the queue
 	move.w	a1,(VDP_Command_Buffer_Slot).w	; Set the next free slot address, potentially undoing the above clr (this is intentional!)
 
 .done:
-	if UseVIntSafeDMA==1
+    if UseVIntSafeDMA==1
 	move.w	(sp)+,sr						; Restore interrupts to previous state
-	endif ;UseVIntSafeDMA==1
+    endif ;UseVIntSafeDMA==1
 	rts
 ; ---------------------------------------------------------------------------
-	if Use128kbSafeDMA==1
+    if Use128kbSafeDMA==1
 .double_transfer:
 	; Hand-coded version to break the DMA transfer into two smaller transfers
 	; that do not cross a 128kB boundary. This is done much faster (at the cost
 	; of space) than by the method of saving parameters and calling the normal
 	; DMA function twice, as Sonic3_Complete does.
 	; If we got here, d0 now has bit 15 clear
-	; d0 is the number of words that got over the end of the 128kB boundary
+	; d0 is the number of words-1 that got over the end of the 128kB boundary
+	addq.w	#1,d0							; Make d0 the number of words past the 128kB boundary
 	sub.w	d0,d3							; First transfer will use only up to the end of the 128kB boundary
 	; Store VDP commands for specifying DMA into the queue
 	swap	d1								; Want the high byte first
+	; Sadly, all registers we can spare are in use right now, so we can't use
+	; no-cost RAM source safety.
 	andi.w	#$7F,d1							; Strip high bit
 	ori.w	#$9700,d1						; Command to specify source address & $FE0000
 	move.w	d1,(a1)+						; Store command
@@ -148,12 +167,7 @@ QueueDMATransfer:
 	lea	8(a1),a1							; Skip past all of these commands
 
 	move.w	d2,d3							; Save for later
-	lsl.l	#2,d2							; Move high bits into (word-swapped) position, accidentally moving everything else
-	addq.w	#1,d2							; Add write bit...
-	ror.w	#2,d2							; ... and put it into place, also moving all other bits into their correct (word-swapped) places
-	swap	d2								; Put all bits in proper places
-	andi.w	#3,d2							; Strip whatever junk was in upper word of d2
-	tas.b	d2								; Add in the DMA bit -- tas fails on memory, but works on registers
+	VRAMCommReg d2, DMA, 1					; Make DMA destination command
 	move.l	d2,(a1)+						; Store command
 
 	cmpa.w	#VDP_Command_Buffer_Slot,a1		; Did this command fill the queue?
@@ -168,30 +182,25 @@ QueueDMATransfer:
 	; d1 contains length up to the end of the 128kB boundary
 	add.w	d1,d1							; Convert it into byte length...
 	add.w	d1,d3							; ... and offset destination by the correct amount
-	lsl.l	#2,d3							; Move high bits into (word-swapped) position, accidentally moving everything else
-	addq.w	#1,d3							; Add write bit...
-	ror.w	#2,d3							; ... and put it into place, also moving all other bits into their correct (word-swapped) places
-	swap	d3								; Put all bits in proper places
-	andi.w	#3,d3							; Strip whatever junk was in upper word of d3
-	tas.b	d3								; Add in the DMA bit -- tas fails on memory, but works on registers
+	VRAMCommReg d3, DMA, 1					; Make DMA destination command
 	move.l	d3,(a1)+						; Store command
 
 	clr.w	(a1)							; Put a stop token at the end of the used part of the queue
 	move.w	a1,(VDP_Command_Buffer_Slot).w	; Set the next free slot address, potentially undoing the above clr (this is intentional!)
 
-	if UseVIntSafeDMA==1
+    if UseVIntSafeDMA==1
 	move.w	(sp)+,sr						; Restore interrupts to previous state
-	endif ;UseVIntSafeDMA==1
+    endif ;UseVIntSafeDMA==1
 	rts
 ; ---------------------------------------------------------------------------
 .skip_second_transfer:
 	move.w	a1,(a1)							; Set the next free slot address, overwriting what the second (**) instruction did
 
-	if UseVIntSafeDMA==1
+    if UseVIntSafeDMA==1
 	move.w	(sp)+,sr						; Restore interrupts to previous state
-	endif ;UseVIntSafeDMA==1
+    endif ;UseVIntSafeDMA==1
 	rts
-	endif ; Use128kbSafeDMA==1
+    endif ; Use128kbSafeDMA==1
 ; End of function QueueDMATransfer
 ; ===========================================================================
 
@@ -203,7 +212,8 @@ QueueDMATransfer:
 
 ; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
 
-; sub_14AC: CopyToVRAM: IssueVDPCommands: Process_DMA: Process_DMA_Queue:
+; sub_14AC: CopyToVRAM: IssueVDPCommands: Process_DMA:
+Process_DMA_Queue:
 ProcessDMAQueue:
 	lea	(VDP_control_port).l,a5
 	lea	(VDP_Command_Buffer).w,a1
