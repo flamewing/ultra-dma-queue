@@ -88,23 +88,26 @@ AssumeMax7FFFXfer := 0&Use128kbSafeDMA
     ifndef DMA
 DMA = %100111
     endif
-    ifndef READ
-READ = %001100
+    ifndef VRAM
+VRAM = %100001
     endif
-    ifndef VRAMCommReg_defined
-VRAMCommReg_defined := 1
-VRAMCommReg macro reg,rwd,clr
+    ifndef vdpCommReg_defined
+; Like vdpComm, but starting from an address contained in a register
+vdpCommReg_defined := 1
+vdpCommReg macro reg,type,rwd,clr
 	lsl.l	#2,reg							; Move high bits into (word-swapped) position, accidentally moving everything else
-    if rwd <> READ
-	addq.w	#1,reg							; Add write bit...
+    if ((type&rwd)&3)<>0
+	addq.w	#((type&rwd)&3),reg				; Add upper access type bits
     endif
-	ror.w	#2,reg							; ... and put it into place, also moving all other bits into their correct (word-swapped) places
+	ror.w	#2,reg							; Put upper access type bits into place, also moving all other bits into their correct (word-swapped) places
 	swap	reg								; Put all bits in proper places
     if clr <> 0
 	andi.w	#3,reg							; Strip whatever junk was in upper word of reg
     endif
-	if rwd == DMA
-	tas.b	reg								; Add in the DMA bit -- tas fails on memory, but works on registers
+    if ((type&rwd)&$FC)==$20
+	tas.b	reg								; Add in the DMA flag -- tas fails on memory, but works on registers
+    elseif ((type&rwd)&$FC)<>0
+	ori.w	#(((type&rwd)&$FC)<<2),reg		; Add in missing access type bits
     endif
     endm
     endif
@@ -154,7 +157,7 @@ QueueDMATransfer:
 	movep.l	d1,1(a1)						; ... and stuff them all into RAM in their proper places (movep for the win)
 	lea	8(a1),a1							; Skip past all of these commands
 
-	VRAMCommReg d2, DMA, 1					; Make DMA destination command
+	vdpCommReg d2,VRAM,DMA,1				; Make DMA destination command
 	move.l	d2,(a1)+						; Store command
 
 	clr.w	(a1)							; Put a stop token at the end of the used part of the queue
@@ -189,7 +192,7 @@ QueueDMATransfer:
 	lea	8(a1),a1							; Skip past all of these commands
 
 	move.w	d2,d3							; Save for later
-	VRAMCommReg d2, DMA, 1					; Make DMA destination command
+	vdpCommReg d2,VRAM,DMA,1				; Make DMA destination command
 	move.l	d2,(a1)+						; Store command
 
 	cmpa.w	#VDP_Command_Buffer_Slot,a1		; Did this command fill the queue?
@@ -210,7 +213,7 @@ QueueDMATransfer:
 	; d1 contains length up to the end of the 128kB boundary
 	add.w	d1,d1							; Convert it into byte length...
 	add.w	d3,d1							; ... and offset destination by the correct amount
-	VRAMCommReg d1, DMA, 1					; Make DMA destination command
+	vdpCommReg d1,VRAM,DMA,1				; Make DMA destination command
 	move.l	d1,(a1)+						; Store command
 
 	clr.w	(a1)							; Put a stop token at the end of the used part of the queue
@@ -275,9 +278,10 @@ InitDMAQueue:
 	move.w	#0,(a1)
 	move.w	a1,(VDP_Command_Buffer_Slot).w
 	move.l	#$96959493,d1
+c := 0
 	rept (VDP_Command_Buffer_Slot-VDP_Command_Buffer)/(7*2)
-	movep.l	d1,2(a1)
-	lea	14(a1),a1
+	movep.l	d1,2+c(a1)
+c := c+14
 	endm
 	rts
 ; End of function ProcessDMAQueue
