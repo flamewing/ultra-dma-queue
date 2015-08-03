@@ -135,7 +135,7 @@ ProcessDMAQueue_Done:
 	rts
 ; End of function ProcessDMAQueue
 ```
-In its place, include the "Queue DMA.asm" file. You can also edit s2.constants.asm to reflect the fact that VDP_Command_Buffer_Slot is now a word instead of a longword.
+In its place, include the "DMA-Queue.asm" file. You can also edit s2.constants.asm to reflect the fact that VDP_Command_Buffer_Slot is now a word instead of a longword.
 
 ### Git S&K version
 Add the following equates somewhere:
@@ -185,7 +185,7 @@ $$stop:
 		rts
 ; End of function Process_DMA_Queue
 ```
-In its place, include the "Queue DMA.asm" file. You can also edit sonic3k.constants.asm to reflect the fact that VDP_Command_Buffer_Slot is now a word instead of a long.
+In its place, include the "DMA-Queue.asm" file. You can also edit sonic3k.constants.asm to reflect the fact that VDP_Command_Buffer_Slot is now a word instead of a long.
 
 ## Additional Care
 There are some additional points that are worth paying attention to.
@@ -208,7 +208,7 @@ If you use this crap, all you need to do to use the code above is:
 
 * replace the dotted labels (composed symbols) by @ labels (local symbols);
 * replace the last two instances of "endm" by "endr";
-* edit the VRAMCommReg macro to use asm68k-style parameters.
+* edit the vdpCommReg macro to use asm68k-style parameters.
 
 And before you complain that asm68k is not crap, I invite you to assemble the following and check the output:
 ```68k
