@@ -68,21 +68,21 @@
 ; What makes matters worse is that the Sonic3_Complete breaks up DMAs that it
 ; should not, meaning you will be wasting more cycles than can be seen by just
 ; comparing similar scenarios.
-Use128kbSafeDMA := 0
+Use128kbSafeDMA = 0
 ; ===========================================================================
 ; Option to mask interrupts while updating the DMA queue. This fixes many race
 ; conditions in the DMA funcion, but it costs 46(6/1) cycles. The better way to
 ; handle these race conditions would be to make unsafe callers (such as S3&K's
 ; KosM decoder) prevent these by masking off interrupts before calling and then
 ; restore interrupts after.
-UseVIntSafeDMA := 0
+UseVIntSafeDMA = 0
 ; ===========================================================================
 ; Option to assume that transfer length is always less than $7FFF. Only makes
 ; sense if Use128kbSafeDMA is 1. Moreover, setting this to 1 will cause trouble
 ; on a 64kB DMA, so make sure you never do one if you set it to 1!
 ; Enabling this saves 4(1/0) cycles on the case where a DMA is broken in two and
 ; both transfers are properly queued, and nothing at all otherwise.
-AssumeMax7FFFXfer := 0&Use128kbSafeDMA
+AssumeMax7FFFXfer = 0&Use128kbSafeDMA
 ; ===========================================================================
 ; Convenience macros, for increased maintainability of the code.
     ifndef DMA
@@ -93,7 +93,7 @@ VRAM = %100001
     endif
     ifndef vdpCommReg_defined
 ; Like vdpComm, but starting from an address contained in a register
-vdpCommReg_defined := 1
+vdpCommReg_defined = 1
 vdpCommReg macro reg,type,rwd,clr
 	lsl.l	#2,reg							; Move high bits into (word-swapped) position, accidentally moving everything else
     if ((type&rwd)&3)<>0
@@ -113,7 +113,7 @@ vdpCommReg macro reg,type,rwd,clr
     endif
 
     ifndef intMacros_defined
-intMacros_defined := 1
+intMacros_defined = 1
 enableInts macro
 	move	#$2300,sr
     endm
