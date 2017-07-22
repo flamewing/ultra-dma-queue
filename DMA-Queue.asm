@@ -139,13 +139,13 @@ QueueDMATransfer:
 
 	lsr.l	#1,d1							; Source address is in words for the VDP registers
     if Use128kbSafeDMA==1
-	move.w  d3,d0							; d0 = length of transfer in words
+	move.w	d3,d0							; d0 = length of transfer in words
 	; Compute position of last transferred word. This handles 2 cases:
 	; (1) zero length DMAs transfer length actually transfer $10000 words
 	; (2) (source+length)&$FFFF == 0
-	subq.w  #1,d0
-	add.w   d1,d0							; d0 = ((src_address >> 1) & $FFFF) + ((xfer_len >> 1) - 1)
-	bcs.s   .double_transfer				; Carry set = ($10000 << 1) = $20000, or new 128kB block
+	subq.w	#1,d0
+	add.w	d1,d0							; d0 = ((src_address >> 1) & $FFFF) + ((xfer_len >> 1) - 1)
+	bcs.s	.double_transfer				; Carry set = ($10000 << 1) = $20000, or new 128kB block
     endif ; Use128kbSafeDMA==1
 
 	; Store VDP commands for specifying DMA into the queue
