@@ -1,6 +1,13 @@
 # Super fast DMA queue for the Sega Genesis
 This is an extremelly optimized DMA queue function for the Sega Genesis, written in Motorolla 68000 assembly. It was made originally for Sonic hacks, but can be used with hacks of other games, or with homebrew games.
 
+## License
+This uses a bsd 0-Clause License (0BSD). The TL;DR version is [here](https://tldrlegal.com/license/bsd-0-clause-license).
+
+Basically, you can use however you want, and you don't have to add credits, licenses, or anything to your hack.
+
+I only ask for the courtesy of giving some credit if you use it, but you are not forced to do it.
+
 ## How much faster is it?
 In this section, I will compare it against the 3 DMA functions that were used by the Sonic hacking community before the release of this code:
 
