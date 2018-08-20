@@ -27,7 +27,7 @@ The stock S&K function is 8(2/0) cycles slower than the S2 version, but it can b
 * 344(53/9) cycles if the new transfer filled the queue;
 * 354(54/10) cycles otherwise.
 
-The Sonic3\_Complete version is based on the S&K stock version; it thus also safe with RAM sources. However, it breaks up DMA transfers that cross 32kB boundaries into two DMA transfers(\*). The way it does this adds an enormous overhead on all DMA transfers. Its times are:
+The Sonic3\_Complete version is based on the S&K stock version; it thus also safe with RAM sources. However, it breaks up DMA transfers that cross 32 kB boundaries into two DMA transfers(\*). The way it does this adds an enormous overhead on all DMA transfers. Its times are:
 
 * If the source is in address $800000 and up (32x RAM, z80 RAM, main RAM):
     * 72(16/0) cycles if the queue was full;
@@ -44,21 +44,23 @@ The Sonic3\_Complete version is based on the S&K stock version; it thus also saf
         * 1030(166/31) cycles if queue became full with the second command;
         * 1040(167/32) cycles otherwise.
 
-As can be seen, you are wasting *hundreds of cycles* by using the Sonic3\_Complete version... but even more than you think when you note the (\*) above: the VDP has issues with DMAs that cross a 128kB boundary in ROM; the Sonic3\_Complete tries to handle this, but is overzealous — it breaks up transfers that cross a **32**kB boundary instead. Thus, loads of DMAs are broken into two that should not be broken at all... leading to several hundreds of wasted cycles. The function is bad enough that manually breaking up the transfers would be much faster — potentially 2/3 of the time.
+As can be seen, you are wasting *hundreds of cycles* by using the Sonic3\_Complete version... but even more than you think when you note the (\*) above: the VDP has issues with DMAs that cross a 128 kB boundary in ROM; the Sonic3\_Complete tries to handle this, but is overzealous — it breaks up transfers that cross a **32** kB boundary instead. Thus, loads of DMAs are broken into two that should not be broken at all... leading to several hundreds of wasted cycles. The function is bad enough that manually breaking up the transfers would be much faster — potentially 2/3 of the time.
 
 So, how does my optimized function compare with this?
 
-There are two basic versions you can select with a flag during assembly: the "competitor" to stock S2/stock S&K versions, which does not care whether or not transfers cross a 128kB boundary; and the "competitor" to Sonic3\_Complete version, which is 128kB safe. Both of them are safe for RAM sources, and done so in an optimized way that has zero cost -- the functions would not be faster without this added protection. The times for the non-128kB-safe version are:
+There are three basic versions you can select with flags during assembly:
 
-* 48(11/0) cycles if the queue was full at the start;
-* 194(33/9) cycles otherwise.
-
-The times for the 128kB-safe version are:
-
-* 48(11/0) cycles if the queue was full at the start (as always);
-* 214(37/9) cycles for DMA transfers that do not need to be split into two;
-* 252(46/9) cycles if the first piece of the DMA filled the queue;
-* 368(64/16) cycles if both pieces of the DMA were queued.
+* the "competitor" to stock S2 version: does not care whether the transfer crosses a 128 kB boundary, and is not safe for use with RAM sources. This version runs in:
+    * 48(11/0) cycles if the queue was full;
+    * 160(27/9) cycles otherwise.
+* the "competitor" to stock S&K version: also does not care whether the transfer crosses a 128 kB boundary, but it *is* safe for use with RAM sources. This version (the default) runs in:
+    * 48(11/0) cycles if the queue was full;
+    * 184(29/9) cycles otherwise.
+* the "competitor" to Sonic3\_Complete version, which is 128 kB safe *and* is safe for use with RAM sources. This version runs in:
+    * 48(11/0) cycles if the queue was full full at the start (as always);
+    * 200(32/9) cycles if the DMA does not cross a 128kB boundary;
+    * 222(37/9) cycles if the DMA crosses a 128kB boundary, and the first piece fills the queue (second piece is discarded)
+    * 334(52/17) cycles if the DMA crosses a 128kB boundary, and the queue has space for both pieces (both pieces queued)
 
 I will leave comparisons to whoever want to make them; however, I *will* mention that if you use SonMapEd-generated DPLCs and you are using the Sonic3\_Complete function, you are easily wasting thousands of cycles every frame.
 
@@ -73,11 +75,12 @@ In the end, you will have gained two bytes in RAM, and a DMA queue that runs muc
 ### Git S2 version
 Find every instance of this code:
 ```68k
+	clr.w	(VDP_Command_Buffer).w
 	move.l	#VDP_Command_Buffer,(VDP_Command_Buffer_Slot).w
 ```
 and change it to this:
 ```68k
-	move.w	#VDP_Command_Buffer,(VDP_Command_Buffer_Slot).w
+	ResetDMAQueue
 ```
 Now find this:
 ```68k
@@ -106,10 +109,9 @@ Now find the "SpecialStage" label and scan down to this:
 	andi.b	#$BF,d0
 	move.w	d0,(VDP_control_port).l
 ```
-Add these lines after the above block:
+Add this line after the above block:
 ```68k
-	clr.w	(VDP_Command_Buffer).w
-	move.w	#VDP_Command_Buffer,(VDP_Command_Buffer_Slot).w
+	ResetDMAQueue
 ```
 Then scan further down until you find this:
 ```68k
@@ -152,13 +154,17 @@ VDP_Command_Buffer_Slot := DMA_queue_slot
 ```
 Then find all cases of
 ```68k
+		clr.w	(DMA_queue).w
+		move.l	#DMA_queue,(DMA_queue_slot).w
+```
+and all cases of
+```68k
 		move.w	#0,(DMA_queue).w
 		move.l	#DMA_queue,(DMA_queue_slot).w
 ```
 and change them to
 ```68k
-		move.w	#0,(DMA_queue).w
-		move.w	#DMA_queue,(DMA_queue_slot).w
+		ResetDMAQueue
 ```
 Now find all cases of
 ```68k
@@ -200,10 +206,32 @@ There are some additional points that are worth paying attention to.
 ### 128kB boundaries and you
 For both S2 or S&K (or anywhere you want to use this), the version that does not check for 128kB boundaries is the default. The reason is this: you can (and should) always align the problematic art in such a way that the DMA never needs to be split in two. So enabling this option by default carries a penalty with little real benefit. In any case, you can toggle this by setting the Use128kbSafeDMA option to 1.
 
-### Transfers of 64kB or larger
-If you have enabled the version that breaks DMAs into two if they go over a 128kB boundary, this is relevant for you; but if you don't care about modified Sega Genesis consoles with 128kB of VRAM, you can simply skip this.
+### RAM sources and you
+Sources in RAM typically have the top byte of the source address equal to $FF. This causes a problem when shifting down, because a 1 comes down to bit 23 of the source address as it is sent to the VP, which is actually the DMA flag (needs to be 0). For this reason, the DMA queue function defaults to RAM safety at the cost of 14(2/0) cycles. If you never transfer from RAM, you can set AssumeSourceAddressIsRAMSafe to 1 and gain these cycles back. If you may transfer from RAM, you can still benefit from this by editing all caller sites and doing a bitwise-and of the source address with $FFFFFF. You may have to hunt down the source of the addresses and do it there.
 
-There is an option that saves 4(1/0) cycles on the case where a DMA transfer is broken in two pieces and both pieces are correctly queued (that is, the first transfer did not fill the queue). This option assumes that you never perform a transfer with length of 64kB or higher; note that transfers of exactly 64kB are included here! Under these conditions, a small optimization exists that leads to the small savings mentioned. This is disabled by default to avoid this edge case. If you need transfers larger than 64kB (meaning you are assuming a modified Sega Genesis with 128kB of VRAM), you will want to set AssumeMax7FFFXfer to 0 to disable this optimization.
+### Source adresses in words
+By default, source addresses are in bytes, while the DMA length is in words. Moreover, the source address is converted to words to send to the VDP. You can use this to save 10(1/0) cycles if you pre-divide all source addresses by 2, then set AssumeSourceAddressInBytes to 0. Like with the above option, you will need to hunt down the ultimate sources of the addresses.
+
+### RAM sources *and* addresses in words
+You can combine both of the above in one step: you can use the supplied dmaSource function to convert all source addresses to satisfy the requirements of both and save 24(3/0) cycles.
+
+### Macros, space vs time
+If you are doing a static DMA (see below for an example), you can use the supplied QueueStaticDMA to inline the code and save even more cycles. This macro does not try to split DMAs for crossing 128 kB boundaries, and just errors out (during assembly) instead. A static DMA is of the form:
+```68k
+	move.l	#(Chunk_Table+$7C00) & $FFFFFF,d1
+	move.w	#tiles_to_bytes(ArtTile_ArtUnc_HTZClouds),d2
+	move.w	#$80,d3
+	jsr	(QueueDMATransfer).w
+```
+and can be replaced by
+```68k
+	QueueStaticDMA Chunk_Table+$7C00,$100,tiles_to_bytes(ArtTile_ArtUnc_HTZClouds)
+```
+(note that the length went from $80 words to $100 bytes). This just dumps am optimized version of the DMA queuing function. This version runs in:
+* 32(7/0) cycles if queue is full (DMA discarded)
+* 122(21/8) cycles otherwise (DMA queued)
+
+This macro is not interrupt-safe (see below), but can be made safe with UseVIntSafeDMA flag, as described below.
 
 ### Interrupt Safety
 The original functions have several race conditions that makes them unsafe regarding interrupts. My version removes one of them, but adds another. For the vast majority of cases, this is irrelevant — the QueueDMATransfer function is generally called only when Vint\_routine is zero, meaning that the DMA queue will not be processed, and all is well.
