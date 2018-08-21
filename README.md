@@ -115,11 +115,11 @@ Add this line after the above block:
 ```
 Then scan further down until you find this:
 ```68k
-	clearRAM PNT_Buffer,$C04	; PNT buffer
+	clearRAM SS_Misc_Variables,SS_Misc_Variables_End+4
 ```
 and change it to this:
 ```68k
-	clearRAM PNT_Buffer,$C00	; PNT buffer
+	clearRAM SS_Misc_Variables,SS_Misc_Variables_End
 ```
 And finally find this:
 ```68k
