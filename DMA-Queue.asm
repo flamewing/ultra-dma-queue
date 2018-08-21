@@ -184,17 +184,17 @@ QueueStaticDMA_defined = 1
 ; Expects source address and DMA length in bytes. Also, expects source, size, and dest to be known
 ; at assembly time. Gives errors if DMA starts at an odd address, transfers
 ; crosses a 128kB boundary, or has size 0.
-QueueStaticDMA macro source,length,dest
-	if (source&1)<>0
-		fatal "DMA queued from odd source $\{source}!"
+QueueStaticDMA macro src,length,dest
+	if ((src)&1)<>0
+		fatal "DMA queued from odd source $\{src}!"
 	endif
-	if (length&1)<>0
+	if ((length)&1)<>0
 		fatal "DMA an odd number of bytes $\{length}!"
 	endif
-	if length==0
+	if (length)==0
 		fatal "DMA transferring 0 bytes (becomes a 64kB transfer). If you really mean it, pass 64kB (65536) instead."
 	endif
-	if ((source+length-1)>>17)<>(source>>17)
+	if (((src)+(length)-1)>>17)<>((src)>>17)
 		fatal "DMA crosses a 128kB boundary. You should either split the DMA manually or align the source adequately."
 	endif
 	if UseVIntSafeDMA==1
@@ -205,7 +205,7 @@ QueueStaticDMA macro source,length,dest
 	cmpa.w	#VDP_Command_Buffer_Slot,a1
 	beq.s	.done												; Return if there's no more room in the buffer
 	move.b	#(dmaLength(length)>>8)&$FF,DMAEntry.SizeH(a1)		; Write top byte of size/2
-	move.l	#(dmaLength(length)&$FF)<<24)|dmaSource(source),d0	; Set d0 to bottom byte of size/2 and the low 3 bytes of source/2
+	move.l	#((dmaLength(length)&$FF)<<24)|dmaSource(src),d0	; Set d0 to bottom byte of size/2 and the low 3 bytes of source/2
 	movep.l	d0,DMAEntry.SizeL(a1)								; Write it all to the queue
 	lea	DMAEntry.Command(a1),a1									; Seek to correct RAM address to store VDP DMA command
 	move.l	#vdpComm(dest,VRAM,DMA),(a1)+						; Write VDP DMA command for destination address
