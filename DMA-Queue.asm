@@ -325,10 +325,10 @@ ProcessDMAQueue:
 	endm
 ; ---------------------------------------------------------------------------
 c := 1
-	rept QueueSlotCount-1
+	rept QueueSlotCount
 		lea	(VDP_control_port).l,a5
 		lea	(VDP_Command_Buffer).w,a1
-		if c<>QueueSlotCount-1
+		if c<>QueueSlotCount
 			bra.w	.jump0 - c*8
 		endif
 c := c + 1
