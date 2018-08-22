@@ -17,34 +17,34 @@ In this section, I will compare it against the 3 DMA functions that were used by
 
 The stock S2 function is the fastest of the 3:
 
-* 52(12/0) cycles if the queue was full;
-* 336(51/9) cycles if the new transfer filled the queue;
-* 346(52/10) cycles otherwise.
+* 52(12/0) cycles if the queue was full (DMA discarded);
+* 336(51/9) cycles if the new transfer filled the queue (DMA queued);
+* 346(52/10) cycles otherwise (DMA queued).
 
 The stock S&K function is 8(2/0) cycles slower than the S2 version, but it can be safely used when the source is in RAM (the S2 version requires some extra care, but I won't go into details). So its times are:
 
-* 52(12/0) cycles if the queue was full;
-* 344(53/9) cycles if the new transfer filled the queue;
-* 354(54/10) cycles otherwise.
+* 52(12/0) cycles if the queue was full (DMA discarded);
+* 344(53/9) cycles if the new transfer filled the queue (DMA queued);
+* 354(54/10) cycles otherwise (DMA queued).
 
 **TODO:** Fix numbers for Sonic3\_Complete, given Clownacy's recent changes.
 
 The Sonic3\_Complete version is based on the S&K stock version; it thus also safe with RAM sources. However, it breaks up DMA transfers that cross 32 kB boundaries into two DMA transfers(\*). The way it does this adds an enormous overhead on all DMA transfers. Its times are:
 
 * If the source is in address $800000 and up (32x RAM, z80 RAM, main RAM):
-    * 72(16/0) cycles if the queue was full;
-    * 364(57/0) cycles if queue became full with new command;
-    * 374(58/10) cycles otherwise;
+    * 72(16/0) cycles if the queue was full (DMA discarded);
+    * 364(57/0) cycles if queue became full with new command (DMA queued);
+    * 374(58/10) cycles otherwise (DMA queued);
 * If the source is in address $7FFFFF and down (ROM, both SCD RAMs):
     * If the DMA does not need to be split:
-        * 294(53/10) cycles if the queue was full at the start;
-        * 586(94/19) cycles if queue became full with new command;
-        * 596(95/20) cycles otherwise;
+        * 294(53/10) cycles if the queue was full at the start (DMA discarded);
+        * 586(94/19) cycles if queue became full with new command (DMA queued);
+        * 596(95/20) cycles otherwise (DMA queued);
     * If the DMA needs to be split in two:
-        * 436(83/30) cycles if the queue was full at the start;
-        * 728(124/21) cycles if queue became full with the first command;
-        * 1030(166/31) cycles if queue became full with the second command;
-        * 1040(167/32) cycles otherwise.
+        * 436(83/30) cycles if the queue was full at the start (DMA discarded);
+        * 728(124/21) cycles if queue became full with the first command (second piece is discarded);
+        * 1030(166/31) cycles if queue became full with the second command (both pieces queued);
+        * 1040(167/32) cycles otherwise (both pieces queued).
 
 As can be seen, you are wasting *hundreds of cycles* by using the Sonic3\_Complete version... but even more than you think when you note the (\*) above: the VDP has issues with DMAs that cross a 128 kB boundary in ROM; the Sonic3\_Complete tries to handle this, but is overzealous — it breaks up transfers that cross a **32** kB boundary instead. Thus, loads of DMAs are broken into two that should not be broken at all... leading to several hundreds of wasted cycles. The function is bad enough that manually breaking up the transfers would be much faster — potentially 2/3 of the time.
 
@@ -53,16 +53,16 @@ So, how does my optimized function compare with this?
 There are three basic versions you can select with flags during assembly:
 
 * the "competitor" to stock S2 version: does not care whether the transfer crosses a 128 kB boundary, and is not safe for use with RAM sources. This version runs in:
-    * 48(11/0) cycles if the queue was full;
-    * 160(27/9) cycles otherwise.
+    * 48(11/0) cycles if the queue was full (DMA discarded);
+    * 160(27/9) cycles otherwise (DMA queued).
 * the "competitor" to stock S&K version: also does not care whether the transfer crosses a 128 kB boundary, but it *is* safe for use with RAM sources. This version (the default) runs in:
-    * 48(11/0) cycles if the queue was full;
-    * 184(29/9) cycles otherwise.
+    * 48(11/0) cycles if the queue was full (DMA discarded);
+    * 184(29/9) cycles otherwise (DMA queued).
 * the "competitor" to Sonic3\_Complete version, which is 128 kB safe *and* is safe for use with RAM sources. This version runs in:
-    * 48(11/0) cycles if the queue was full full at the start (as always);
-    * 200(32/9) cycles if the DMA does not cross a 128kB boundary;
-    * 226(38/9) cycles if the DMA crosses a 128kB boundary, and the first piece fills the queue (second piece is discarded)
-    * 338(56/17) cycles if the DMA crosses a 128kB boundary, and the queue has space for both pieces (both pieces queued)
+    * 48(11/0) cycles if the queue was full (DMA discarded, no increase compared to other versions);
+    * 200(32/9) cycles if the DMA does not cross a 128kB boundary  (DMA queued);
+    * 226(38/9) cycles if the DMA crosses a 128kB boundary, and the first piece fills the queue (second piece is discarded);
+    * 338(56/17) cycles if the DMA crosses a 128kB boundary, and the queue has space for both pieces (both pieces queued).
 
 I will leave comparisons to whoever want to make them; however, I *will* mention that if you use SonMapEd-generated DPLCs and you are using the Sonic3\_Complete function, you are easily wasting thousands of cycles every frame.
 
@@ -222,16 +222,26 @@ If you are doing a static DMA (see below for an example), you can use the suppli
 ```68k
 	move.l	#(Chunk_Table+$7C00) & $FFFFFF,d1
 	move.w	#tiles_to_bytes(ArtTile_ArtUnc_HTZClouds),d2
-	move.w	#$80,d3
+	move.w	#tiles_to_bytes(8)/2,d3
 	jsr	(QueueDMATransfer).w
 ```
-and can be replaced by
+Including the QueueDMATransfer routine (with default options), this code runs in:
+
+* 94(20/2) cycles if the queue was full (DMA discarded);
+* 230(38/11) otherwise (DMA queued).
+
+This block can be replaced by the macro as follows:
+
 ```68k
-	QueueStaticDMA Chunk_Table+$7C00,$100,tiles_to_bytes(ArtTile_ArtUnc_HTZClouds)
+	QueueStaticDMA Chunk_Table+$7C00,tiles_to_bytes(8),tiles_to_bytes(ArtTile_ArtUnc_HTZClouds)
 ```
-(note that the length went from $80 words to $100 bytes). This just dumps am optimized version of the DMA queuing function. This version runs in:
-* 32(7/0) cycles if queue is full (DMA discarded)
-* 122(21/8) cycles otherwise (DMA queued)
+(note that the length is no longer divided by 2). This dumps am optimized version of the DMA queuing function in-place, so there is no register assignments, no function call and no return. This code runs in:
+* 32(7/0) cycles if queue is full (DMA discarded);
+* 122(21/8) cycles otherwise (DMA queued).
+
+So it is clear that using the macro represents enormous savings when possible, especially when compared to the stock versions of the DMA queue function. It does come at a cost: the macro is 20 words long, versus 9 words for the original code.
+
+If the caller uses a `jmp` instead of a `jsr`, the savings are smaller: `jmp` is 8(1/0) cycles faster than `jsr`, and you need to add an `rts` after the QueueStaticDMA macro (an additional 16(4/0) cycles).
 
 This macro is not interrupt-safe (see below), but can be made safe with UseVIntSafeDMA flag, as described below.
 

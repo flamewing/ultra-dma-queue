@@ -39,7 +39,7 @@
 ;
 ; With Use128kbSafeDMA = 1, runs in:
 ; * 48(11/0) cycles if queue is full at the start (DMA discarded)
-; * 200(32/9) cycles if the DMA does not cross a 128kB boundary
+; * 200(32/9) cycles if the DMA does not cross a 128kB boundary (DMA queued)
 ; * 226(38/9) cycles if the DMA crosses a 128kB boundary, and the first piece
 ;   fills the queue (second piece is discarded)
 ; * 338(56/17) cycles if the DMA crosses a 128kB boundary, and the queue has
@@ -54,7 +54,7 @@
 ; Setting AssumeSourceAddressIsRAMSafe to 1, or UseRAMSourceSafeDMA to 0,
 ; reduces all times by 14(2/0) cycles, but only if the DMA is not entirely
 ; discarded. However, all callers must be edited to make sure the adresss given
-; in the correct form. You can use the dmaSource function for that
+; in the correct form. You can use the dmaSource function for that.
 ; ---------------------------------------------------------------------------
 ; MACRO QueueStaticDMA
 ; Directly queues a DMA on the spot. Requires all parameters to be known at
