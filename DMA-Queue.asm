@@ -185,17 +185,19 @@ QueueStaticDMA_defined = 1
 ; at assembly time. Gives errors if DMA starts at an odd address, transfers
 ; crosses a 128kB boundary, or has size 0.
 QueueStaticDMA macro src,length,dest
-	if ((src)&1)<>0
-		fatal "DMA queued from odd source $\{src}!"
-	endif
-	if ((length)&1)<>0
-		fatal "DMA an odd number of bytes $\{length}!"
-	endif
-	if (length)==0
-		fatal "DMA transferring 0 bytes (becomes a 64kB transfer). If you really mean it, pass 64kB (65536) instead."
-	endif
-	if (((src)+(length)-1)>>17)<>((src)>>17)
-		fatal "DMA crosses a 128kB boundary. You should either split the DMA manually or align the source adequately."
+	if MOMPASS>1
+		if ((src)&1)<>0
+			fatal "DMA queued from odd source $\{src}!"
+		endif
+		if ((length)&1)<>0
+			fatal "DMA an odd number of bytes $\{length}!"
+		endif
+		if (length)==0
+			fatal "DMA transferring 0 bytes (becomes a 64kB transfer). If you really mean it, pass 64kB (65536) instead."
+		endif
+		if (((src)+(length)-1)>>17)<>((src)>>17)
+			fatal "DMA crosses a 128kB boundary. You should either split the DMA manually or align the source adequately."
+		endif
 	endif
 	if UseVIntSafeDMA==1
 		move.w	sr,-(sp)										; Save current interrupt mask
