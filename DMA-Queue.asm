@@ -246,8 +246,8 @@ QueueDMATransfer:
 
 	if Use128kbSafeDMA<>0
 		; Detect if transfer crosses 128KB boundary
-		sub.w	d1,d0										; Set d0 to the number of words until end of current 128kB block
-		cmp.w	d3,d0										; Are we transferring more than that?
+		move.w	d1,d0
+		add.w	d3,d0										; Does adding the length to the source address overflow the current 128kB block?
 		bcs.s	.doubletransfer								; Branch if yes
 	endif	; Use128kbSafeDMA
 	; It does not cross a 128kB boundary. So just finish writing it.
@@ -270,6 +270,8 @@ QueueDMATransfer:
 	if Use128kbSafeDMA<>0
 .doubletransfer:
 		; We need to split the DMA into two parts, since it crosses a 128kB block
+		moveq	#0,d0
+		sub.w	d1,d0										; Set d0 to the number of words until end of current 128kB block
 		movep.w	d0,DMAEntry.Size(a1)						; Write DMA length of first part, overwriting useless top byte of source addres
 
 		cmpa.w	#VDP_Command_Buffer_Slot-DMAEntry.len,a1	; Does the queue have enough space for both parts?
