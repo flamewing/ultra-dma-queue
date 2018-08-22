@@ -40,9 +40,9 @@
 ; With Use128kbSafeDMA = 1, runs in:
 ; * 48(11/0) cycles if queue is full at the start (DMA discarded)
 ; * 200(32/9) cycles if the DMA does not cross a 128kB boundary
-; * 222(37/9) cycles if the DMA crosses a 128kB boundary, and the first piece
+; * 226(38/9) cycles if the DMA crosses a 128kB boundary, and the first piece
 ;   fills the queue (second piece is discarded)
-; * 334(52/17) cycles if the DMA crosses a 128kB boundary, and the queue has
+; * 338(56/17) cycles if the DMA crosses a 128kB boundary, and the queue has
 ;   space for both pieces (both pieces queued)
 ;
 ; Setting UseVIntSafeDMA to 1 adds 46(6/1) cycles to all times.
@@ -193,7 +193,7 @@ QueueStaticDMA macro src,length,dest
 			fatal "DMA an odd number of bytes $\{length}!"
 		endif
 		if (length)==0
-			fatal "DMA transferring 0 bytes (becomes a 64kB transfer). If you really mean it, pass 64kB (65536) instead."
+			fatal "DMA transferring 0 bytes (becomes a 128kB transfer). If you really mean it, pass 128kB instead."
 		endif
 		if (((src)+(length)-1)>>17)<>((src)>>17)
 			fatal "DMA crosses a 128kB boundary. You should either split the DMA manually or align the source adequately."
@@ -248,8 +248,20 @@ QueueDMATransfer:
 
 	if Use128kbSafeDMA<>0
 		; Detect if transfer crosses 128KB boundary
-		move.w	d1,d0
-		add.w	d3,d0										; Does adding the length to the source address overflow the current 128kB block?
+		; Using sub+sub instead of move+add handles the following edge cases:
+		; (1) d3.w == 0 => 128kB transfer
+		;   (a) d1.w == 0 => no carry, don't split the DMA
+		;   (b) d1.w != 0 => carry, need to split the DMA
+		; (2) d3.w != 0
+		;   (a) if there is carry on d1.w + d3.w
+		;     (* ) if d1.w + d3.w == 0 => transfer comes entirely from current 128kB block, don't split the DMA
+		;     (**) if d1.w + d3.w != 0 => need to split the DMA
+		;   (b) if there is no carry on d1.w + d3.w => don't split the DMA
+		; The reason this works is that carry on d1.w + d3.w means that
+		; d1.w + d3.w >= $10000, whereas carry on (-d3.w) - (d1.w) means that
+		; d1.w + d3.w > $10000.
+		sub.w	d3,d0										; Using sub instead of move and add allows checking edge cases
+		sub.w	d1,d0										; Does the transfer cross over to the next 128kB block?
 		bcs.s	.doubletransfer								; Branch if yes
 	endif	; Use128kbSafeDMA
 	; It does not cross a 128kB boundary. So just finish writing it.
@@ -272,8 +284,7 @@ QueueDMATransfer:
 	if Use128kbSafeDMA<>0
 .doubletransfer:
 		; We need to split the DMA into two parts, since it crosses a 128kB block
-		moveq	#0,d0
-		sub.w	d1,d0										; Set d0 to the number of words until end of current 128kB block
+		add.w	d3,d0										; Set d0 to the number of words until end of current 128kB block
 		movep.w	d0,DMAEntry.Size(a1)						; Write DMA length of first part, overwriting useless top byte of source addres
 
 		cmpa.w	#VDP_Command_Buffer_Slot-DMAEntry.len,a1	; Does the queue have enough space for both parts?

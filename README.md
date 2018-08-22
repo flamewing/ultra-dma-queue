@@ -27,6 +27,8 @@ The stock S&K function is 8(2/0) cycles slower than the S2 version, but it can b
 * 344(53/9) cycles if the new transfer filled the queue;
 * 354(54/10) cycles otherwise.
 
+**TODO:** Fix numbers for Sonic3\_Complete, given Clownacy's recent changes.
+
 The Sonic3\_Complete version is based on the S&K stock version; it thus also safe with RAM sources. However, it breaks up DMA transfers that cross 32 kB boundaries into two DMA transfers(\*). The way it does this adds an enormous overhead on all DMA transfers. Its times are:
 
 * If the source is in address $800000 and up (32x RAM, z80 RAM, main RAM):
@@ -59,8 +61,8 @@ There are three basic versions you can select with flags during assembly:
 * the "competitor" to Sonic3\_Complete version, which is 128 kB safe *and* is safe for use with RAM sources. This version runs in:
     * 48(11/0) cycles if the queue was full full at the start (as always);
     * 200(32/9) cycles if the DMA does not cross a 128kB boundary;
-    * 222(37/9) cycles if the DMA crosses a 128kB boundary, and the first piece fills the queue (second piece is discarded)
-    * 334(52/17) cycles if the DMA crosses a 128kB boundary, and the queue has space for both pieces (both pieces queued)
+    * 226(38/9) cycles if the DMA crosses a 128kB boundary, and the first piece fills the queue (second piece is discarded)
+    * 338(56/17) cycles if the DMA crosses a 128kB boundary, and the queue has space for both pieces (both pieces queued)
 
 I will leave comparisons to whoever want to make them; however, I *will* mention that if you use SonMapEd-generated DPLCs and you are using the Sonic3\_Complete function, you are easily wasting thousands of cycles every frame.
 
