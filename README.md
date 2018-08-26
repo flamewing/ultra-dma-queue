@@ -54,7 +54,7 @@ There are three basic versions you can select with flags during assembly:
 
 * the "competitor" to stock S2 version: does not care whether the transfer crosses a 128 kB boundary, and is not safe for use with RAM sources. This version runs in:
     * 48(11/0) cycles if the queue was full (DMA discarded);
-    * 160(27/9) cycles otherwise (DMA queued).
+    * 170(27/9) cycles otherwise (DMA queued).
 * the "competitor" to stock S&K version: also does not care whether the transfer crosses a 128 kB boundary, but it *is* safe for use with RAM sources. This version (the default) runs in:
     * 48(11/0) cycles if the queue was full (DMA discarded);
     * 184(29/9) cycles otherwise (DMA queued).
