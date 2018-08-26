@@ -27,23 +27,17 @@ The stock S&K function is 8(2/0) cycles slower than the S2 version, but it can b
 * 344(53/9) cycles if the new transfer filled the queue (DMA queued);
 * 354(54/10) cycles otherwise (DMA queued).
 
-The Sonic3\_Complete version is based on the S&K stock version; it thus also safe with RAM sources. However, it breaks up DMA transfers that cross 128 kB boundaries into two DMA transfers, making it 128 kB safesafe. It does this in a way that adds enourmous overhead o all DMAs, though:
+The Sonic3\_Complete version is based on the S&K stock version; it thus also safe with RAM sources. However, it breaks up DMA transfers that cross 128 kB boundaries into two DMA transfers, making it 128 kB safesafe. It does this in a way that adds enourmous overhead on all DMAs, though:
 
 * If the DMA does not cross a 128 kB boundary:
-    * If the DMA ends right at the edge of the 128 kB boundary:
-        * 78(17/0) cycles if the queue was full (DMA discarded);
-        * 360(57/9) cycles if queue became full with new command (DMA queued);
-        * 370(58/10) cycles otherwise (DMA queued);
-    * Otherwise:
-        * 86(18/0) cycles if the queue was full (DMA discarded);
-        * 368(58/9) cycles if queue became full with new command (DMA queued);
-        * 378(59/10) cycles otherwise (DMA queued);
+    * 82(18/0) cycles if the queue was full (DMA discarded);
+    * 364(58/9) cycles if queue became full with new command (DMA queued);
+    * 374(59/10) cycles otherwise (DMA queued);
 * If the DMA crosses a 128 kB boundary:
-    * If the DMA needs to be split in two:
-        * 256(50/8) cycles if the queue was full at the start (DMA discarded);
-        * 538(90/17) cycles if queue became full with the first command (second piece is discarded);
-        * 830(131/27) cycles if queue became full with the second command (both pieces queued);
-        * 840(132/28) cycles otherwise (both pieces queued).
+    * 248(49/8) cycles if the queue was full at the start (DMA discarded);
+    * 530(89/17) cycles if queue became full with the first command (second piece is discarded);
+    * 822(130/27) cycles if queue became full with the second command (both pieces queued);
+    * 832(131/28) cycles otherwise (both pieces queued).
 
 As can be seen, you are wasting *hundreds of cycles* by using the Sonic3\_Complete version... but it is not as bad as it was before Clownacy improved that version. If you are using an older version of the disassembly, however, things are a bit more grim. I won't go into details; but even if you do not use my queue, you should consider updating to the new Sonic3\_Complete queue. In any event, the function is bad enough that manually breaking up the transfers would be much faster — potentially 2/3 of the time.
 
