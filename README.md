@@ -228,7 +228,7 @@ This block can be replaced by the macro as follows:
 ```68k
 	QueueStaticDMA Chunk_Table+$7C00,tiles_to_bytes(8),tiles_to_bytes(ArtTile_ArtUnc_HTZClouds)
 ```
-(note that the length is no longer divided by 2). This dumps am optimized version of the DMA queuing function in-place, so there is no register assignments, no function call and no return. This code runs in:
+(note that the length is no longer divided by 2). This dumps an optimized version of the DMA queuing function in-place, so there is no register assignments, no function call and no return. This code runs in:
 * 32(7/0) cycles if queue is full (DMA discarded);
 * 122(21/8) cycles otherwise (DMA queued).
 
