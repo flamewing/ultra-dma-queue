@@ -211,7 +211,7 @@ By default, source addresses are in bytes, while the DMA length is in words. Mor
 You can combine both of the above in one step: you can use the supplied dmaSource function to convert all source addresses to satisfy the requirements of both and save 24(3/0) cycles.
 
 ### Macros, space vs time
-If you are doing a static DMA (see below for an example), you can use the supplied QueueStaticDMA to inline the code and save even more cycles. This macro does not try to split DMAs for crossing 128 kB boundaries, and just errors out (during assembly) instead. A static DMA is of the form:
+If you are doing a static DMA (see below for an example), you can use the supplied QueueStaticDMA macro to inline the code and save even more cycles. This macro does not try to split DMAs for crossing 128 kB boundaries, and just errors out (during assembly) instead. A static DMA is of the form:
 ```68k
 	move.l	#(Chunk_Table+$7C00) & $FFFFFF,d1
 	move.w	#tiles_to_bytes(ArtTile_ArtUnc_HTZClouds),d2
@@ -247,8 +247,9 @@ There is one exception, though: the S3&K KosM decoder. Since the KosM decoder se
 If you use this crap, all you need to do to use the code above is:
 
 * replace the dotted labels (composed symbols) by @ labels (local symbols);
-* replace the last two instances of "endm" by "endr";
-* edit the vdpCommReg macro to use asm68k-style parameters.
+* replace the last four instances of "endm" by "endr";
+* expand all functions in their usage site and delete the definitions;
+* edit all macros to use asm68k-style parameters.
 
 And before you complain that asm68k is not crap, I invite you to assemble the following and check the output:
 ```68k
