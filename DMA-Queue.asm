@@ -26,7 +26,7 @@
 ; 	Use128kbSafeDMA (default 0)
 ; 	UseVIntSafeDMA (default 0)
 ; Input:
-; 	d1	Source address (in bytes, or in words if AssumeSourceAddressIsRAMSafe is
+; 	d1	Source address (in bytes, or in words if AssumeSourceAddressInBytes is
 ; 		set to 0)
 ; 	d2	Destination address
 ; 	d3	Transfer length (in words)
