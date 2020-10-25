@@ -370,7 +370,7 @@ c := c + 1
 
 InitDMAQueue:
 	lea	(VDP_Command_Buffer).w,a0
-	move.b	#$94,d0
+	moveq	#-$6C,d0				; fast-store $94 (sign-extended) in d0
 	move.l	#$93979695,d1
 c := 0
 	rept QueueSlotCount
